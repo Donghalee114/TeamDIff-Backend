@@ -11,10 +11,8 @@ const PORT = 6900;
 // 라우터 불러오기
 const summonerRoutes = require('./routes/summoner');
 const matchRoutes = require('./routes/match');
-const rolesRoutes = require('./routes/roles');
-const analyzeRoutes = require('./routes/analyze');
 const teamRouter = require('./routes/team');
-
+const mergedAnalyze = require('./routes/mergedAnalyze');
 
 
 // const teamRoutes = require('./routes/team'); ← 나중에 추가
@@ -27,8 +25,7 @@ app.get('/', (req, res) => {
 // API 라우트 등록
 app.use('/summoner', summonerRoutes);
 app.use('/match', matchRoutes);
-app.use('/roles', rolesRoutes);
-app.use('/analyze', analyzeRoutes);
+app.use('/merged-analyze', mergedAnalyze);
 app.use('/teams', teamRouter);
 // app.use('/team', teamRoutes); ← 나중에 추가
 
