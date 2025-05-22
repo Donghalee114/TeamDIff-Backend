@@ -6,7 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = 6900;
+const PORT = process.env.PORT || 6900;
 
 // 라우터 불러오기
 const summonerRoutes = require('./routes/summoner');
