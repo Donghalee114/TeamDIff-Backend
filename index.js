@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -13,6 +14,9 @@ const summonerRoutes = require('./routes/summoner');
 const matchRoutes = require('./routes/match');
 const teamRouter = require('./routes/team');
 const mergedAnalyze = require('./routes/mergedAnalyze');
+const makeTeam = require('./routes/maketeam'); // 나중에 추가
+const tournament = require('./routes/tournament')
+const path = require('path');
 
 
 // const teamRoutes = require('./routes/team'); ← 나중에 추가
@@ -27,6 +31,10 @@ app.use('/summoner', summonerRoutes);
 app.use('/match', matchRoutes);
 app.use('/merged-analyze', mergedAnalyze);
 app.use('/teams', teamRouter);
+app.use('/maketeam', makeTeam); // 나중에 추가
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/tournament' , tournament)
+
 // app.use('/team', teamRoutes); ← 나중에 추가
 
 app.listen(PORT, () => {

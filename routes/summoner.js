@@ -48,8 +48,15 @@ router.get('/league/:puuid', async (req, res) => {
 
     res.json(leagueRes.data);
   } catch (error) {
-    res.status(500).json({ error: 'API 호출 실패' });
+  console.error('🔥 분석 실패:', error.message);
+  if (error.response) {
+    console.error('🔁 응답 상태:', error.response.status);
+    console.error('📄 응답 내용:', error.response.data);
+  } else {
+    console.error('🧨 기타 오류:', error);
   }
+  res.status(500).json({ error: '분석 실패', detail: error.message });
+}
 });
 
 module.exports = router;
