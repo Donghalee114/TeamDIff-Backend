@@ -1,13 +1,24 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-
+const { pool } = require('./db.js')
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 6900;
+
+const checkConnet = async => {
+  try{
+ pool.query('SELECT NOW()')
+  .then(() => console.log(' PostgreSQL 연결 성공'))
+  }catch{
+    (err => console.error(' PostgreSQL 연결 실패:', err))
+    ;}
+ 
+}
+
 
 // 라우터 불러오기
 const summonerRoutes = require('./routes/summoner');
@@ -40,3 +51,6 @@ app.use('/tournament' , tournament)
 app.listen(PORT, () => {
   console.log(`서버 실행 중: http://localhost:${PORT}`);
 });
+
+checkConnet()
+
