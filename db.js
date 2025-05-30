@@ -36,13 +36,67 @@ const createTables = async () => {
       );
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS team_members (
+        teamId TEXT,
+        summonerName TEXT NOT NULL,
+        leader_puuid TEXT,
+        member_puuid TEXT ,
+        PRIMARY KEY (teamId, summonerName),
+        FOREIGN KEY (teamId) REFERENCES teams(id) ON DELETE CASCADE
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS matches (
+        matchId TEXT PRIMARY KEY,
+        teamA_id TEXT,
+        teamB_id TEXT,
+        winner_team TEXT,
+        game_start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (teamA_id) REFERENCES teams(id),
+        FOREIGN KEY (teamB_id) REFERENCES teams(id),
+        FOREIGN KEY (winner_team) REFERENCES teams(id)
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS match_players (
+        id SERIAL PRIMARY KEY,
+        matchId TEXT NOT NULL,
+        puuid TEXT NOT NULL,
+        summonerName TEXT,
+        team_id TEXT,
+        kills INTEGER DEFAULT 0,
+        deaths INTEGER DEFAULT 0,
+        assists INTEGER DEFAULT 0,
+        win BOOLEAN,
+        FOREIGN KEY (matchId) REFERENCES matches(matchId) ON DELETE CASCADE
+      );
+    `);
+
+
     console.log('PostgreSQL 테이블 생성 완료');
   } catch (err) {
     console.error('PostgreSQL 테이블 생성 오류:', err);
   }
 };
 
-createTables();
+const checkTest = async () => {
+  try {
+    await pool.query(
+      `INSERT INTO tournaments (id, name, adminID, adminPassword)
+       VALUES ($1, $2, $3, $4)`,
+      ['23131d', 'latest', 'latest', 'latest']
+    );
+    console.log('✅ 삽입 완료');
+  } catch (err) {
+    console.error('❌ 오류:', err.message);
+  }
+};
 
+checkTest();
+
+createTables();
 
 module.exports = pool;
