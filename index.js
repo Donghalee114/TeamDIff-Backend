@@ -23,11 +23,9 @@ const checkConnet = async => {
 // 라우터 불러오기
 const summonerRoutes = require('./routes/summoner');
 const matchRoutes = require('./routes/match');
-const teamRouter = require('./routes/team');
 const mergedAnalyze = require('./routes/mergedAnalyze');
-const makeTeam = require('./routes/maketeam'); // 나중에 추가
 const tournament = require('./routes/tournament')
-const path = require('path');
+const team = require('./routes/team.js')
 
 
 // const teamRoutes = require('./routes/team'); ← 나중에 추가
@@ -41,16 +39,17 @@ app.get('/', (req, res) => {
 app.use('/summoner', summonerRoutes);
 app.use('/match', matchRoutes);
 app.use('/merged-analyze', mergedAnalyze);
-app.use('/teams', teamRouter);
-app.use('/maketeam', makeTeam); // 나중에 추가
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/tournament' , tournament)
+app.use('/teams' , team)
 
 // app.use('/team', teamRoutes); ← 나중에 추가
 
 app.listen(PORT, () => {
   console.log(`서버 실행 중: http://localhost:${PORT}`);
 });
+
+
+
 
 checkConnet()
 

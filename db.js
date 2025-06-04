@@ -39,6 +39,7 @@ const createTables = async () => {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS team_members (
         teamId TEXT,
+        tournamentsID TEXT NOT NULL,
         summonerName TEXT NOT NULL,
         leader_puuid TEXT,
         member_puuid TEXT ,
@@ -54,9 +55,9 @@ const createTables = async () => {
         teamB_id TEXT,
         winner_team TEXT,
         game_start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (teamA_id) REFERENCES teams(id),
-        FOREIGN KEY (teamB_id) REFERENCES teams(id),
-        FOREIGN KEY (winner_team) REFERENCES teams(id)
+        FOREIGN KEY (teamA_id) REFERENCES teams(id) ON DELETE CASCADE,
+        FOREIGN KEY (teamB_id) REFERENCES teams(id) ON DELETE CASCADE,
+        FOREIGN KEY (winner_team) REFERENCES teams(id) ON DELETE CASCADE
       );
     `);
 
@@ -87,7 +88,7 @@ const checkTest = async () => {
     await pool.query(
       `INSERT INTO tournaments (id, name, adminID, adminPassword)
        VALUES ($1, $2, $3, $4)`,
-      ['23131d', 'latest', 'latest', 'latest']
+      ['23d31d', 'latest', 'latest', 'latest']
     );
     console.log('✅ 삽입 완료');
   } catch (err) {
@@ -95,8 +96,17 @@ const checkTest = async () => {
   }
 };
 
-checkTest();
+const deleteTournament = async () => {
+  try{
+    await pool.query(
+      `DELETE FROM tournaments *`
+    )
+    console.log("삭제완료")
+  } catch(err){
+    console.err("오류" , err.message)
+  } 
+}
 
-createTables();
+createTables()
 
 module.exports = pool;

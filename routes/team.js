@@ -86,18 +86,38 @@ function evaluateTeamSplit(teamA, teamB) {
   const tierMultiplier = getTierPenaltyMultiplier(avgTierScore);
   const mainRoleBonusScore = Math.max(0, (mainRoleCount - subPositionCount)) * 10 * tierMultiplier;
 
+  const roleGroupDiff = ROLES.reduce((sum, role) => {
+    const a = teamA.find(p => p.assignedRole === role)?.totalScore || 0;
+    const b = teamB.find(p => p.assignedRole === role)?.totalScore || 0;
+    return sum + Math.abs(a - b);
+  }, 0);
+
+  const tierGapPenalty =
+    (Math.max(...teamA.map(p => p.totalScore)) - Math.min(...teamA.map(p => p.totalScore))) +
+    (Math.max(...teamB.map(p => p.totalScore)) - Math.min(...teamB.map(p => p.totalScore)));
+
+  const positionDiversityPenalty =
+    ROLES.filter(r => !teamA.find(p => p.assignedRole === r)).length +
+    ROLES.filter(r => !teamB.find(p => p.assignedRole === r)).length;
+
   const weights = {
     scoreDiff: 1.0,
     subPosPenalty: 30.0,
     roleMismatch: 6.0,
     variancePenalty: 6.0,
+    roleGroupPenalty: 4.0,
+    tierGapPenalty: 4.0,
+    diversityPenalty: 15.0
   };
 
   const finalScore =
     weights.scoreDiff * Math.pow(scoreDiff, 1.1) +
     weights.subPosPenalty * Math.pow(subPositionCount, 1.2) +
     weights.roleMismatch * Math.pow(roleMatchupDiff, 1.05) +
-    weights.variancePenalty * variance -
+    weights.variancePenalty * variance +
+    weights.roleGroupPenalty * roleGroupDiff +
+    weights.tierGapPenalty * tierGapPenalty +
+    weights.diversityPenalty * positionDiversityPenalty -
     mainRoleBonusScore;
 
   return {
@@ -108,7 +128,10 @@ function evaluateTeamSplit(teamA, teamB) {
     scoreDiff,
     subPositionCount,
     roleMatchupDiff,
+    roleGroupDiff,
     variance,
+    tierGapPenalty,
+    positionDiversityPenalty,
     mainRoleCount,
     mainRoleBonusScore: Math.floor(mainRoleBonusScore),
     finalScore: Math.floor(finalScore),
@@ -117,7 +140,10 @@ function evaluateTeamSplit(teamA, teamB) {
       scoreDiff,
       subPositionCount,
       roleMatchupDiff,
+      roleGroupDiff,
       variance,
+      tierGapPenalty,
+      positionDiversityPenalty,
       mainRoleCount,
       tierMultiplier: Number(tierMultiplier.toFixed(3)),
       mainRoleBonusScore: Math.floor(mainRoleBonusScore),
@@ -125,6 +151,7 @@ function evaluateTeamSplit(teamA, teamB) {
     }
   };
 }
+
 
 function hasSufficientRoles(players) {
   const counts = ROLES.reduce((acc, r) => (acc[r] = 0, acc), {});

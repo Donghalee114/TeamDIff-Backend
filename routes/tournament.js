@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const pool = require('../db');
 const multer = require('multer');
+const { error } = require('console');
 const router = express.Router();
 
 
@@ -19,7 +20,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 /* ========================
-   🔹 토너먼트 관련
+  토너먼트 관련
 ======================== */
 
 // 생성
@@ -116,23 +117,38 @@ router.post('/tournaments/:id/verify', async (req, res) => {
     res.status(500).json({ error: '서버 오류' });
   }
 });
+
+router.delete('/tournaments/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      `DELETE FROM tournaments WHERE id = $1`,
+      [id]
+    );
+
+    // 삭제된 행이 없을 경우 (존재하지 않는 ID)
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "해당 토너먼트를 찾을 수 없습니다." });
+    }
+
+    res.status(200).json({ message: "토너먼트가 성공적으로 삭제되었습니다." });
+  } catch (err) {
+    console.error("토너먼트 삭제 에러", err);
+    res.status(500).json({ error: "서버 오류로 인해 삭제에 실패했습니다." });
+  }
+})
 /* ========================
-   🔹 팀 관련
+  팀 관련
 ======================== */
 
 // 팀 생성
-router.post('/teams', upload.single('logo'), async (req, res) => {
-  const { name, shortName, tournamentsID } = req.body;
-  if (!req.file) return res.status(400).json({ error: '로고 이미지가 없습니다.' });
+router.post('/:id/teams', async (req, res) => {
+  const { name, shortName, tournamentsID, logoUrl } = req.body;
+  const id = Math.random().toString(36).substring(2, 8);
 
-  const logoUrl = `/uploads/${req.file.filename}`;
-  const id = shortName.toLowerCase();
-
-  if (name.length < 2 || name.length > 20) {
-    return res.status(400).json({ error: '팀 이름은 2~20자 사이여야 합니다.' });
-  }
-  if (shortName.length < 2 || shortName.length > 3) {
-    return res.status(400).json({ error: '팀 약어는 2~3자 사이여야 합니다.' });
+  if (!logoUrl || !logoUrl.startsWith('http')) {
+    return res.status(400).json({ error: '유효한 로고 URL이 필요합니다.' });
   }
 
   try {
@@ -158,7 +174,7 @@ router.post('/teams', upload.single('logo'), async (req, res) => {
 });
 
 // 팀 단일 조회
-router.get('/teams/:id', async (req, res) => {
+router.get('/:id/teams', async (req, res) => {
   const teamId = req.params.id;
   try {
     const result = await pool.query('SELECT * FROM teams WHERE id = $1', [teamId]);
@@ -171,7 +187,7 @@ router.get('/teams/:id', async (req, res) => {
 });
 
 // 전체 팀 조회 (관리용)
-router.get('/teams', async (req, res) => {
+router.get('/:id/teams', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM teams');
     res.json(result.rows);
@@ -181,8 +197,26 @@ router.get('/teams', async (req, res) => {
   }
 });
 
+router.delete('/:id/teams', async (req, res) => {
+  const teamId = req.params.id;
+
+  try {
+    const result = await pool.query('DELETE FROM teams WHERE id = $1', [teamId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: '팀을 찾을 수 없습니다.' });
+    }
+
+    res.json({ message: '팀이 성공적으로 삭제되었습니다.' });
+  } catch (err) {
+    console.error('팀 삭제 실패:', err.message);
+    res.status(500).json({ error: 'DB 오류' });
+  }
+});
+
+
 /* ========================
-   🔹 팀 멤버 관련
+  팀 멤버 관련
 ======================== */
 // 팀 멤버 추가 (등록)
 router.post('/teams/:teamId/members', async (req, res) => {
@@ -219,7 +253,7 @@ router.get('/teams/:teamId/members', async (req, res) => {
 
 
 /* ========================
-   🔹 매치 관련
+  매치 관련
 ======================== */
 
 // 매치 생성
