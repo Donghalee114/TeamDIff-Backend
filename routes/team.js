@@ -1,4 +1,3 @@
-// 개선된 백엔드 팀 배정 로직 (같은 라인 2명 금지 + 라인별 실력차 반영 강화)
 const express = require('express');
 const router = express.Router();
 
@@ -12,7 +11,7 @@ function assignRolesBestEffort(team) {
   for (const player of sortedTeam) {
     const preferences = [player.mainRole, ...(player.backupRoles || [])];
     const available = preferences.find(role => !used.has(role));
-    const assignedRole = available || null; // 이제는 null 허용
+    const assignedRole = available || "UNASSIGNED";
     if (assignedRole) used.add(assignedRole);
     assigned.push({ ...player, assignedRole });
   }
@@ -74,7 +73,7 @@ function getRoleMatchupDiff(teamA, teamB) {
     const a = teamA.find(p => p.assignedRole === role);
     const b = teamB.find(p => p.assignedRole === role);
     if (!a || !b) {
-      sum += 1000; // 라인 매칭 실패 시 강한 패널티
+      sum += 1000;
     } else {
       sum += Math.abs((a.totalScore || 0) - (b.totalScore || 0));
     }
@@ -139,8 +138,7 @@ function evaluateTeamSplit(teamA, teamB) {
     weights.roleGroupPenalty * roleGroupDiff +
     weights.tierGapPenalty * tierGapPenalty +
     weights.diversityPenalty * positionDiversityPenalty +
-    weights.roleConflictPenalty * roleConflicts -
-    mainRoleBonusScore;
+    weights.roleConflictPenalty * roleConflicts - mainRoleBonusScore;
 
   return {
     teamA, teamB, teamAScore, teamBScore, scoreDiff,
@@ -159,6 +157,27 @@ function evaluateTeamSplit(teamA, teamB) {
       finalScore: Math.floor(finalScore)
     }
   };
+}
+
+function assignTeams(players) {
+  const combinations = getCombinations(players, 5);
+  let best = null;
+  let bestScore = Infinity;
+
+  for (const combo of combinations) {
+    const rest = players.filter(p => !combo.includes(p));
+    const teamA = assignRolesBestEffort(combo);
+    const teamB = assignRolesBestEffort(rest);
+    if (hasDuplicateRoles(teamA) || hasDuplicateRoles(teamB)) continue;
+
+    const evalResult = evaluateTeamSplit(teamA, teamB);
+    if (evalResult.finalScore < bestScore) {
+      best = evalResult;
+      bestScore = evalResult.finalScore;
+    }
+  }
+
+  return best;
 }
 
 function getUnassignedRoleCount(team) {
@@ -185,7 +204,6 @@ router.post('/make-teams', (req, res) => {
     return res.status(400).json({ error: '팀 배정 실패 (포지션 중복 또는 구성이 불가능)' });
   }
 
-  // 포지션 충돌 감지 및 경고 메시지 추가
   const teamAConflict = getDuplicateRoleCount(result.teamA);
   const teamBConflict = getDuplicateRoleCount(result.teamB);
   const totalUnassigned = getUnassignedRoleCount(result.teamA) + getUnassignedRoleCount(result.teamB);
@@ -200,6 +218,5 @@ router.post('/make-teams', (req, res) => {
       : '라인과 실력 점수를 기준으로 팀이 안정적으로 구성되었습니다.'
   });
 });
-
 
 module.exports = router;
