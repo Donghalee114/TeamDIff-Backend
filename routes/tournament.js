@@ -49,7 +49,7 @@ router.post('/tournaments', async (req, res) => {
 // 전체 조회
 router.get('/tournaments', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM tournaments');
+    const result = await pool.query('SELECT id , name FROM tournaments');
     res.json(result.rows);
   } catch (err) {
     console.error('토너먼트 조회 실패:', err.message);
