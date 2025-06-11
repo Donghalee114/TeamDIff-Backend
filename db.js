@@ -44,7 +44,9 @@ const createTables = async () => {
         leader_puuid TEXT,
         member_puuid TEXT ,
         PRIMARY KEY (teamId, summonerName),
-        FOREIGN KEY (teamId) REFERENCES teams(id) ON DELETE CASCADE
+        FOREIGN KEY (teamId) REFERENCES teams(id) ON DELETE CASCADE,
+        FOREIGN KEY (tournamentsID) REFERENCES tournaments(id) ON DELETE CASCADE
+
       );
     `);
 
@@ -77,6 +79,7 @@ const createTables = async () => {
     `);
 
 
+
     console.log('PostgreSQL 테이블 생성 완료');
   } catch (err) {
     console.error('PostgreSQL 테이블 생성 오류:', err);
@@ -105,6 +108,19 @@ const deleteTournament = async () => {
   } catch(err){
     console.err("오류" , err.message)
   } 
+}
+
+const checks = async () => {
+  try{
+    const result = await pool.query(
+      `SELECT * FROM team_members`
+    )
+    console.log(result.rows)
+  }
+
+  catch(err){
+    console.err("오류" , err.message)
+}
 }
 
 createTables()

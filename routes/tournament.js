@@ -59,7 +59,6 @@ router.get('/tournaments', async (req, res) => {
 
 // 단일 조회
 router.get('/tournaments/:id', async (req, res) => {
-  console.log('[요청 받은 tournament ID]', req.params.id)
   const id = req.params.id;
   try {
     const result = await pool.query('SELECT * FROM tournaments WHERE id = $1', [id]);
@@ -171,6 +170,7 @@ router.post('/:id/teams', async (req, res) => {
     console.error('팀 생성 실패:', err.message);
     res.status(500).json({ error: 'DB 오류' });
   }
+
 });
 
 // 팀 단일 조회
@@ -220,24 +220,44 @@ router.delete('/:id/teams', async (req, res) => {
 ======================== */
 // 팀 멤버 추가 (등록)
 router.post('/teams/:teamId/members', async (req, res) => {
-  const { summonerName, puuid, role } = req.body;
-  const { teamId } = req.params;
-  
+  const { teamId, tournamentsID , summonerName, leader_puuid, member_puuid, role } = req.body;
+
   if (!['LEADER', 'MEMBER'].includes(role)) {
     return res.status(400).json({ error: '유효하지 않은 역할입니다.' });
   }
 
   try {
-    await pool.query(
-      'INSERT INTO team_members (teamId, summonerName, puuid, role) VALUES ($1, $2, $3, $4)',
-      [teamId, summonerName, puuid, role]
-    );
-    res.status(201).json({ message: '팀 멤버 추가 완료' });
+    await pool.query(`
+        INSERT INTO team_members (teamId, tournamentsID, summonerName, leader_puuid, member_puuid)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (teamId, summonerName) 
+        DO UPDATE SET 
+        leader_puuid = EXCLUDED.leader_puuid,
+        member_puuid = EXCLUDED.member_puuid
+`, [teamId, tournamentsID, summonerName, role === 'LEADER' ? leader_puuid : null, role === 'MEMBER' ? member_puuid : null]);
+
+
+    res.status(201).json({ message: '팀 멤버 추가/수정 완료' });
   } catch (err) {
     console.error('팀 멤버 추가 실패:', err.message);
     res.status(500).json({ error: 'DB 오류' });
   }
 });
+
+
+router.delete('/teams/:teamId/members', async (req, res) => {
+  const { teamId } = req.params;
+
+  try {
+    await pool.query(`DELETE FROM team_members WHERE teamId = $1`, [teamId]);
+    res.status(200).json({ message: '팀 멤버 전체 삭제 완료' });
+  } catch (err) {
+    console.error('팀 멤버 삭제 실패:', err.message);
+    res.status(500).json({ error: 'DB 삭제 오류' });
+  }
+});
+
+
 
 // 팀 멤버 조회
 router.get('/teams/:teamId/members', async (req, res) => {
@@ -250,6 +270,29 @@ router.get('/teams/:teamId/members', async (req, res) => {
     res.status(500).json({ error: 'DB 오류' });
   }
 });
+
+// GET /teams/:teamId
+router.get('/teams/:teamId', async (req, res) => {
+  const { teamId } = req.params;
+
+  try {
+    const result = await pool.query(
+      'SELECT * FROM teams WHERE id = $1',
+      [teamId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: '팀을 찾을 수 없습니다.' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('팀 조회 실패:', err.message);
+    res.status(500).json({ error: 'DB 오류' });
+  }
+});
+
+
 
 
 /* ========================

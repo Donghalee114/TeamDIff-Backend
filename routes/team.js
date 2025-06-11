@@ -1,21 +1,20 @@
-// 개선된 백엔드 팀 배정 로직
+// 개선된 백엔드 팀 배정 로직 (같은 라인 2명 금지 + 라인별 실력차 반영 강화)
 const express = require('express');
 const router = express.Router();
 
 const ROLES = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'];
 
-function assignRoles(team) {
+function assignRolesBestEffort(team) {
   const used = new Set();
   const assigned = [];
-
   const sortedTeam = [...team].sort((a, b) => (a.totalScore || 0) - (b.totalScore || 0));
 
   for (const player of sortedTeam) {
     const preferences = [player.mainRole, ...(player.backupRoles || [])];
     const available = preferences.find(role => !used.has(role));
-    if (!available) return null;
-    used.add(available);
-    assigned.push({ ...player, assignedRole: available });
+    const assignedRole = available || null; // 이제는 null 허용
+    if (assignedRole) used.add(assignedRole);
+    assigned.push({ ...player, assignedRole });
   }
 
   return assigned;
@@ -48,13 +47,34 @@ function countMainRoles(team) {
   return team.filter(p => p.assignedRole === p.mainRole).length;
 }
 
+function countRoleConflicts(team) {
+  const seen = new Set();
+  let count = 0;
+  for (const p of team) {
+    if (!p.assignedRole) continue;
+    if (seen.has(p.assignedRole)) count++;
+    seen.add(p.assignedRole);
+  }
+  return count;
+}
+
+function hasDuplicateRoles(team) {
+  const roleCounts = {};
+  for (const p of team) {
+    if (!p.assignedRole) continue;
+    roleCounts[p.assignedRole] = (roleCounts[p.assignedRole] || 0) + 1;
+    if (roleCounts[p.assignedRole] > 1) return true;
+  }
+  return false;
+}
+
 function getRoleMatchupDiff(teamA, teamB) {
   let sum = 0;
   for (const role of ROLES) {
     const a = teamA.find(p => p.assignedRole === role);
     const b = teamB.find(p => p.assignedRole === role);
     if (!a || !b) {
-      sum += ((a?.totalScore || b?.totalScore || 1000) * 0.4); // 가중 패널티
+      sum += 1000; // 라인 매칭 실패 시 강한 패널티
     } else {
       sum += Math.abs((a.totalScore || 0) - (b.totalScore || 0));
     }
@@ -69,18 +89,18 @@ function getTeamVariance(team) {
 
 function getTierPenaltyMultiplier(score) {
   const clamped = Math.max(400, Math.min(4000, score));
-  return 1.5 - ((clamped - 400) / 3600) * 1.3; // 1.5 ~ 0.2
+  return 1.5 - ((clamped - 400) / 3600) * 1.3;
 }
 
 function evaluateTeamSplit(teamA, teamB) {
   const teamAScore = getTeamScore(teamA);
   const teamBScore = getTeamScore(teamB);
   const scoreDiff = Math.abs(teamAScore - teamBScore);
-
   const subPositionCount = countSubRoles(teamA) + countSubRoles(teamB);
   const roleMatchupDiff = getRoleMatchupDiff(teamA, teamB);
   const variance = getTeamVariance(teamA) + getTeamVariance(teamB);
   const mainRoleCount = countMainRoles(teamA) + countMainRoles(teamB);
+  const roleConflicts = countRoleConflicts(teamA) + countRoleConflicts(teamB);
 
   const avgTierScore = (teamAScore + teamBScore) / 2;
   const tierMultiplier = getTierPenaltyMultiplier(avgTierScore);
@@ -102,12 +122,13 @@ function evaluateTeamSplit(teamA, teamB) {
 
   const weights = {
     scoreDiff: 1.0,
-    subPosPenalty: 30.0,
-    roleMismatch: 6.0,
+    subPosPenalty: 40.0,
+    roleMismatch: 10.0,
     variancePenalty: 6.0,
     roleGroupPenalty: 4.0,
     tierGapPenalty: 4.0,
-    diversityPenalty: 15.0
+    diversityPenalty: 20.0,
+    roleConflictPenalty: 30.0
   };
 
   const finalScore =
@@ -117,107 +138,40 @@ function evaluateTeamSplit(teamA, teamB) {
     weights.variancePenalty * variance +
     weights.roleGroupPenalty * roleGroupDiff +
     weights.tierGapPenalty * tierGapPenalty +
-    weights.diversityPenalty * positionDiversityPenalty -
+    weights.diversityPenalty * positionDiversityPenalty +
+    weights.roleConflictPenalty * roleConflicts -
     mainRoleBonusScore;
 
   return {
-    teamA,
-    teamB,
-    teamAScore,
-    teamBScore,
-    scoreDiff,
-    subPositionCount,
-    roleMatchupDiff,
-    roleGroupDiff,
-    variance,
-    tierGapPenalty,
-    positionDiversityPenalty,
-    mainRoleCount,
+    teamA, teamB, teamAScore, teamBScore, scoreDiff,
+    subPositionCount, roleMatchupDiff, roleGroupDiff,
+    variance, tierGapPenalty, positionDiversityPenalty,
+    mainRoleCount, roleConflicts,
     mainRoleBonusScore: Math.floor(mainRoleBonusScore),
     finalScore: Math.floor(finalScore),
     fallbackUsed: false,
     scoreBreakdown: {
-      scoreDiff,
-      subPositionCount,
-      roleMatchupDiff,
-      roleGroupDiff,
-      variance,
-      tierGapPenalty,
-      positionDiversityPenalty,
-      mainRoleCount,
-      tierMultiplier: Number(tierMultiplier.toFixed(3)),
+      scoreDiff, subPositionCount, roleMatchupDiff,
+      roleGroupDiff, variance, tierGapPenalty,
+      positionDiversityPenalty, mainRoleCount,
+      roleConflicts, tierMultiplier: Number(tierMultiplier.toFixed(3)),
       mainRoleBonusScore: Math.floor(mainRoleBonusScore),
       finalScore: Math.floor(finalScore)
     }
   };
 }
 
-
-function hasSufficientRoles(players) {
-  const counts = ROLES.reduce((acc, r) => (acc[r] = 0, acc), {});
-  for (const p of players) if (counts[p.mainRole] !== undefined) counts[p.mainRole]++;
-  return ROLES.every(r => counts[r] >= 1);
+function getUnassignedRoleCount(team) {
+  return team.filter(p => !p.assignedRole).length;
 }
 
-function assignTeams(players) {
-  const combinations = getCombinations(players, 5);
-  let best = null;
-  for (const teamA of combinations) {
-    const teamB = players.filter(p => !teamA.includes(p));
-    const assignedA = assignRoles(teamA);
-    const assignedB = assignRoles(teamB);
-    if (!assignedA || !assignedB) continue;
-    const evaluated = evaluateTeamSplit(assignedA, assignedB);
-    if (!best || evaluated.finalScore < best.finalScore) best = evaluated;
+function getDuplicateRoleCount(team) {
+  const roleCounts = {};
+  for (const p of team) {
+    if (!p.assignedRole) continue;
+    roleCounts[p.assignedRole] = (roleCounts[p.assignedRole] || 0) + 1;
   }
-  return best;
-}
-
-function assignTeamsByScore(players) {
-  const combinations = getCombinations(players, 5);
-  let best = null;
-  let minDiff = Infinity;
-  for (const teamA of combinations) {
-    const teamB = players.filter(p => !teamA.includes(p));
-    const scoreA = getTeamScore(teamA);
-    const scoreB = getTeamScore(teamB);
-    const diff = Math.abs(scoreA - scoreB);
-    if (diff > minDiff) continue;
-
-    const assignedA = assignRoles(teamA);
-    const assignedB = assignRoles(teamB);
-
-    best = {
-      teamA: assignedA || teamA,
-      teamB: assignedB || teamB,
-      teamAScore: scoreA,
-      teamBScore: scoreB,
-      scoreDiff: diff,
-      fallbackUsed: true,
-      fallbackReason: assignedA && assignedB ? 'score-only fallback with role assignment' : 'score-only fallback without role assignment'
-    };
-    minDiff = diff;
-  }
-  return best;
-}
-
-function assignTeamsWithSoftRoles(players) {
-  const combinations = getCombinations(players, 5);
-  let best = null;
-  let bestScore = Infinity;
-  for (const teamA of combinations) {
-    const teamB = players.filter(p => !teamA.includes(p));
-    const assignedA = assignRoles(teamA);
-    const assignedB = assignRoles(teamB);
-    if (!assignedA || !assignedB) continue;
-    const result = evaluateTeamSplit(assignedA, assignedB);
-    if (result.finalScore < bestScore) {
-      best = result;
-      best.fallbackUsed = true;
-      bestScore = result.finalScore;
-    }
-  }
-  return best;
+  return Object.values(roleCounts).filter(c => c > 1).length;
 }
 
 router.post('/make-teams', (req, res) => {
@@ -226,29 +180,26 @@ router.post('/make-teams', (req, res) => {
     return res.status(400).json({ error: '10명의 플레이어가 필요합니다.' });
   }
 
-  let result = null;
-
-  if (hasSufficientRoles(players)) {
-    result = assignTeams(players);
-    if (!result) {
-      console.log('Plan A 실패 → soft fallback');
-      result = assignTeamsWithSoftRoles(players);
-    }
-  } else {
-    console.log('포지션 부족 → soft fallback');
-    result = assignTeamsWithSoftRoles(players);
-  }
-
+  const result = assignTeams(players);
   if (!result) {
-    console.log('Soft 실패 → 점수 fallback');
-    result = assignTeamsByScore(players);
+    return res.status(400).json({ error: '팀 배정 실패 (포지션 중복 또는 구성이 불가능)' });
   }
 
-  if (!result) {
-    return res.status(400).json({ error: '팀 배정 실패' });
-  }
+  // 포지션 충돌 감지 및 경고 메시지 추가
+  const teamAConflict = getDuplicateRoleCount(result.teamA);
+  const teamBConflict = getDuplicateRoleCount(result.teamB);
+  const totalUnassigned = getUnassignedRoleCount(result.teamA) + getUnassignedRoleCount(result.teamB);
 
-  res.json(result);
+  const conflictDetected = (teamAConflict > 0 || teamBConflict > 0 || totalUnassigned > 0);
+
+  res.json({
+    ...result,
+    conflict: conflictDetected,
+    message: conflictDetected
+      ? '일부 포지션이 중복되었거나 배정되지 않았습니다. 주/부 포지션을 다양하게 설정해주세요.'
+      : '라인과 실력 점수를 기준으로 팀이 안정적으로 구성되었습니다.'
+  });
 });
+
 
 module.exports = router;
