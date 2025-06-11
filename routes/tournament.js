@@ -61,7 +61,7 @@ router.get('/tournaments', async (req, res) => {
 router.get('/tournaments/:id', async (req, res) => {
   const id = req.params.id;
   try {
-    const result = await pool.query('SELECT * FROM tournaments WHERE id = $1', [id]);
+    const result = await pool.query('SELECT id FROM tournaments WHERE id = $1', [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: '토너먼트를 찾을 수 없습니다.' });
     res.json(result.rows[0]);
   } catch (err) {
