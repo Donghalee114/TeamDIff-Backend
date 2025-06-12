@@ -28,7 +28,7 @@ router.get('/:puuid', async (req, res) => {
       const matchRes = await axios.get(
         `https://asia.api.riotgames.com/lol/match/v5/matches/${matchId}`,
         { headers: { 'X-Riot-Token': apiKey } ,
-          parem: {
+          params: {
             queue : 420
         }
       }

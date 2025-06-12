@@ -159,6 +159,30 @@ function evaluateTeamSplit(teamA, teamB) {
   };
 }
 
+function assignRolesForceFallback(team) {
+  const used = new Set();
+  const assigned = [];
+
+  const sortedTeam = [...team].sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
+  let remainingRoles = [...ROLES];
+
+  for (const player of sortedTeam) {
+    const preferences = [player.mainRole, ...(player.backupRoles || [])];
+    let available = preferences.find(r => !used.has(r));
+
+    if (!available) {
+      available = remainingRoles.find(r => !used.has(r));
+    }
+
+    const finalRole = available || "UNASSIGNED";
+    if (finalRole !== "UNASSIGNED") used.add(finalRole);
+    assigned.push({ ...player, assignedRole: finalRole });
+  }
+
+  return assigned;
+}
+
+
 function assignTeams(players) {
   const combinations = getCombinations(players, 5);
   let best = null;
@@ -166,9 +190,13 @@ function assignTeams(players) {
 
   for (const combo of combinations) {
     const rest = players.filter(p => !combo.includes(p));
-    const teamA = assignRolesBestEffort(combo);
-    const teamB = assignRolesBestEffort(rest);
-    if (hasDuplicateRoles(teamA) || hasDuplicateRoles(teamB)) continue;
+    let teamA = assignRolesBestEffort(combo);
+    let teamB = assignRolesBestEffort(rest);
+
+    if (hasDuplicateRoles(teamA) || hasDuplicateRoles(teamB)) {
+        teamA = assignRolesForceFallback(combo);
+        teamB = assignRolesForceFallback(rest);
+    };
 
     const evalResult = evaluateTeamSplit(teamA, teamB);
     if (evalResult.finalScore < bestScore) {
