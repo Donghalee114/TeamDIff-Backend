@@ -41,11 +41,17 @@ function scheduleRoomDeletion(roomId) {
 router.get('/:roomId', (req, res) => {
   const room = getRoom(req.params.roomId);
   if (!room) return res.status(404).json({ error: 'Room not found' });
-  res.json(room);
+
+  res.json({
+    ...room,
+    picked: room.picked || [],
+    turnIdx: room.turnIdx || 0,
+    series: room.series || { blueWins: 0, redWins: 0, currentGame: 1 },
+  });
 });
 
 router.post('/', (req, res) => {
-  const { roomId, blueTeam, redTeam, bo, mode } = req.body;
+  const { roomId, blueTeam, redTeam, bo, mode , hostKey } = req.body;
   if (!roomId || !blueTeam || !redTeam || !bo || !mode) {
     return res.status(400).json({ message: '필수 값 누락' });
   }
@@ -61,12 +67,12 @@ router.post('/', (req, res) => {
     mode,
     blueReady: false,
     redReady: false,
-    draftStarted: false
+    draftStarted: false,
+    hostId: null
   });
 
   res.status(201).json({ message: '방 생성 완료' });
 });
-
 
 // ✅ 외부에서 사용 가능하도록 export
 module.exports = router
