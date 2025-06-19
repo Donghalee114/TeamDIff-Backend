@@ -49,7 +49,7 @@ router.post('/tournaments', async (req, res) => {
 // 전체 조회
 router.get('/tournaments', async (req, res) => {
   try {
-    const result = await pool.query('SELECT id , name FROM tournaments');
+    const result = await pool.query('SELECT id, name FROM tournaments');
     res.json(result.rows);
   } catch (err) {
     console.error('토너먼트 조회 실패:', err.message);
@@ -61,7 +61,7 @@ router.get('/tournaments', async (req, res) => {
 router.get('/tournaments/:id', async (req, res) => {
   const id = req.params.id;
   try {
-    const result = await pool.query('SELECT id FROM tournaments WHERE id = $1', [id]);
+    const result = await pool.query('SELECT id , name FROM tournaments WHERE id = $1', [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: '토너먼트를 찾을 수 없습니다.' });
     res.json(result.rows[0]);
   } catch (err) {
@@ -143,12 +143,9 @@ router.delete('/tournaments/:id', async (req, res) => {
 
 // 팀 생성
 router.post('/:id/teams', async (req, res) => {
-  const { name, shortName, tournamentsID, logoUrl } = req.body;
+  const { name, shortName, tournamentsID,  } = req.body;
   const id = Math.random().toString(36).substring(2, 8);
 
-  if (!logoUrl || !logoUrl.startsWith('http')) {
-    return res.status(400).json({ error: '유효한 로고 URL이 필요합니다.' });
-  }
 
   try {
     const check = await pool.query(
@@ -160,12 +157,12 @@ router.post('/:id/teams', async (req, res) => {
     }
 
     await pool.query(
-      `INSERT INTO teams (id, tournamentsID, name, shortName, logoUrl, winCount, lossCount, totalMatches)
-       VALUES ($1, $2, $3, $4, $5, 0, 0, 0)`,
-      [id, tournamentsID, name, shortName.toUpperCase(), logoUrl]
+      `INSERT INTO teams (id, tournamentsID, name, shortName,  winCount, lossCount, totalMatches)
+       VALUES ($1, $2, $3, $4, 0, 0, 0)`,
+      [id, tournamentsID, name, shortName.toUpperCase(), ]
     );
 
-    res.status(201).json({ message: '팀 생성 완료', logoUrl });
+    res.status(201).json({ message: '팀 생성 완료',  });
   } catch (err) {
     console.error('팀 생성 실패:', err.message);
     res.status(500).json({ error: 'DB 오류' });
@@ -174,7 +171,7 @@ router.post('/:id/teams', async (req, res) => {
 });
 
 // 팀 단일 조회
-router.get('/:id/teams', async (req, res) => {
+router.get('/:id/team', async (req, res) => {
   const teamId = req.params.id;
   try {
     const result = await pool.query('SELECT * FROM teams WHERE id = $1', [teamId]);
@@ -317,15 +314,32 @@ router.post('/matches', async (req, res) => {
 });
 
 // 전체 매치 조회
-router.get('/matches', async (req, res) => {
+// routes/matches.js
+router.get("/matches", async (_req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM matches ORDER BY game_start_time DESC');
-    res.json(result.rows);
-  } catch (err) {
-    console.error('매치 조회 실패:', err.message);
-    res.status(500).json({ error: 'DB 오류' });
+    const { rows } = await pool.query(`
+      SELECT 
+        m.matchId,
+        m.teamA_id  AS team_a_id,
+        ta.name     AS team_a_name,
+        m.teamB_id  AS team_b_id,
+        tb.name     AS team_b_name,
+        m.scoreA    AS score_a,
+        m.scoreB    AS score_b,
+        m.winner_team,
+        m.game_start_time
+      FROM matches m
+      JOIN teams ta ON ta.id = m.teamA_id
+      JOIN teams tb ON tb.id = m.teamB_id
+      ORDER BY m.game_start_time DESC
+    `);
+    res.json(rows);
+  } catch (e) {
+    console.error("매치 조회 실패:", e.message);
+    res.status(500).json({ error: "DB 오류" });
   }
 });
+
 
 // 특정 팀의 매치 조회
 router.get('/teams/:teamId/matches', async (req, res) => {
