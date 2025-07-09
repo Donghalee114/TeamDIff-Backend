@@ -26,7 +26,6 @@ const createTables = async () => {
         tournamentsID TEXT NOT NULL,
         name TEXT NOT NULL,
         shortName TEXT NOT NULL,
-        logoUrl TEXT,
         winCount INTEGER DEFAULT 0,
         lossCount INTEGER DEFAULT 0,
         totalMatches INTEGER DEFAULT 0,
@@ -43,6 +42,7 @@ const createTables = async () => {
         summonerName TEXT NOT NULL,
         leader_puuid TEXT,
         member_puuid TEXT ,
+        line TEXT,
         PRIMARY KEY (teamId, summonerName),
         FOREIGN KEY (teamId) REFERENCES teams(id) ON DELETE CASCADE,
         FOREIGN KEY (tournamentsID) REFERENCES tournaments(id) ON DELETE CASCADE
@@ -53,14 +53,18 @@ const createTables = async () => {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS matches (
         matchId TEXT PRIMARY KEY,
-        teamA_id TEXT,
-        teamB_id TEXT,
+        teamA_id TEXT NOT NULL,
+        teamB_id TEXT NOT NULL,
         winner_team TEXT,
+        scoreA INTEGER DEFAULT 0,
+        scoreB INTEGER DEFAULT 0,
         game_start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CHECK (teamA_id <> teamB_id),
         FOREIGN KEY (teamA_id) REFERENCES teams(id) ON DELETE CASCADE,
         FOREIGN KEY (teamB_id) REFERENCES teams(id) ON DELETE CASCADE,
         FOREIGN KEY (winner_team) REFERENCES teams(id) ON DELETE CASCADE
-      );
+);
+
     `);
 
     await pool.query(`
@@ -74,8 +78,11 @@ const createTables = async () => {
         deaths INTEGER DEFAULT 0,
         assists INTEGER DEFAULT 0,
         win BOOLEAN,
-        FOREIGN KEY (matchId) REFERENCES matches(matchId) ON DELETE CASCADE
+        UNIQUE (matchId, puuid),
+        FOREIGN KEY (matchId) REFERENCES matches(matchId) ON DELETE CASCADE,
+        FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL
       );
+
     `);
 
 
@@ -99,16 +106,23 @@ const checkTest = async () => {
   }
 };
 
-const deleteTournament = async () => {
-  try{
-    await pool.query(
-      `DELETE FROM tournaments *`
-    )
-    console.log("삭제완료")
-  } catch(err){
-    console.err("오류" , err.message)
-  } 
-}
+const deleteAllTables = async () => {
+  try {
+    await pool.query(`
+      DROP TABLE IF EXISTS 
+        match_players,
+        matches,
+        team_members,
+        teams,
+        tournaments
+      CASCADE;
+    `);
+    console.log("🔴 모든 테이블 삭제 완료");
+  } catch (err) {
+    console.error("❌ 삭제 중 오류:", err.message);
+  }
+};
+
 
 const checks = async () => {
   try{

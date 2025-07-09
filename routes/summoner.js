@@ -23,7 +23,7 @@ router.get('/:name', async (req, res) => {
       name: response.data.gameName
     });
   } catch (error) {
-    res.status(500).json({ error: 'API 호출 실패' });
+    res.status(500).json({ error: `API 호출 실패 ${error.message}` });
   }
 });
 
@@ -31,16 +31,9 @@ router.get('/league/:puuid', async (req, res) => {
   const puuid = req.params.puuid;
 
   try {
-    const summonerRes = await axios.get(
-      `https://kr.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}`,
-      {
-        headers: { 'X-Riot-Token': apiKey }
-      }
-    );
-    const summonerId = summonerRes.data.id;
 
     const leagueRes = await axios.get(
-      `https://kr.api.riotgames.com/lol/league/v4/entries/by-summoner/${summonerId}`,
+      `https://kr.api.riotgames.com/lol/league/v4/entries/by-puuid/${puuid}`,
       {
         headers: { 'X-Riot-Token': apiKey }
       }

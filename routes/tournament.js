@@ -4,7 +4,7 @@ const pool = require('../db');
 const multer = require('multer');
 const { error } = require('console');
 const router = express.Router();
-
+const bcrypt = require('bcrypt');
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 
@@ -34,9 +34,10 @@ router.post('/tournaments', async (req, res) => {
       return res.status(400).json({ error: '중복된 참가코드입니다.' });
     }
 
+    const hashedPassword = await bcrypt.hash(adminPassword, 10)
     await pool.query(
       'INSERT INTO tournaments (id, name, adminID, adminPassword) VALUES ($1, $2, $3, $4)',
-      [id, name, adminId, adminPassword]
+      [id, name, adminId, hashedPassword]
     );
 
     res.status(201).json({ id, name });
@@ -104,7 +105,7 @@ router.post('/tournaments/:id/verify', async (req, res) => {
     }
 
     // 비밀번호 bcrypt 비교
-    const isMatch = (adminPassword === adminpassword);
+    const isMatch = await bcrypt.compare(adminPassword, adminpassword);
     if (!isMatch) {
       return res.status(401).json({ error: 'Password mismatch' });
     }
@@ -217,7 +218,7 @@ router.delete('/:id/teams', async (req, res) => {
 ======================== */
 // 팀 멤버 추가 (등록)
 router.post('/teams/:teamId/members', async (req, res) => {
-  const { teamId, tournamentsID , summonerName, leader_puuid, member_puuid, role } = req.body;
+  const { teamId, tournamentsID , summonerName, leader_puuid, member_puuid, role , line } = req.body;
 
   if (!['LEADER', 'MEMBER'].includes(role)) {
     return res.status(400).json({ error: '유효하지 않은 역할입니다.' });
@@ -225,13 +226,13 @@ router.post('/teams/:teamId/members', async (req, res) => {
 
   try {
     await pool.query(`
-        INSERT INTO team_members (teamId, tournamentsID, summonerName, leader_puuid, member_puuid)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO team_members (teamId, tournamentsID, summonerName, leader_puuid, member_puuid, line)
+        VALUES ($1, $2, $3, $4, $5 , $6)
         ON CONFLICT (teamId, summonerName) 
         DO UPDATE SET 
         leader_puuid = EXCLUDED.leader_puuid,
         member_puuid = EXCLUDED.member_puuid
-`, [teamId, tournamentsID, summonerName, role === 'LEADER' ? leader_puuid : null, role === 'MEMBER' ? member_puuid : null]);
+`, [teamId, tournamentsID, summonerName, role === 'LEADER' ? leader_puuid : null, role === 'MEMBER' ? member_puuid : null , line]);
 
 
     res.status(201).json({ message: '팀 멤버 추가/수정 완료' });
@@ -298,19 +299,20 @@ router.get('/teams/:teamId', async (req, res) => {
 
 // 매치 생성
 router.post('/matches', async (req, res) => {
-  const { matchId, teamA_id, teamB_id, winner_team } = req.body;
+  const {
+    matchId, teamA_id, teamB_id,
+    scoreA = 0, scoreB = 0, winner_team = null,
+  } = req.body;
 
   try {
     await pool.query(
-      `INSERT INTO matches (matchId, teamA_id, teamB_id, winner_team)
-       VALUES ($1, $2, $3, $4)`,
-      [matchId, teamA_id, teamB_id, winner_team]
+      `INSERT INTO matches
+       (matchId, teamA_id, teamB_id, scoreA, scoreB, winner_team)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [matchId, teamA_id, teamB_id, scoreA, scoreB, winner_team]
     );
     res.status(201).json({ message: '매치 기록 완료' });
-  } catch (err) {
-    console.error('매치 생성 실패:', err.message);
-    res.status(500).json({ error: 'DB 오류' });
-  }
+  } catch (err) { /* ... */ }
 });
 
 // 전체 매치 조회

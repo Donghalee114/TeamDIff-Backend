@@ -1,7 +1,9 @@
 const PER_TURN_TIME = 30_000;
 const CHAMP_URL     = 'https://ddragon.leagueoflegends.com/cdn/14.12.1/data/ko_KR/champion.json';
 
-module.exports = function initDraftSocket(io) {
+
+
+module.exports = function initDraftSocket(io , closedRoomIds) {
   const rooms = {};
   let championIds = [];
 
@@ -26,10 +28,19 @@ module.exports = function initDraftSocket(io) {
       if (roomId && role) {
         socket.to(roomId).emit('user-left', { role });    // 상대에게 알림
         console.log(`[알림] ${role} 유저 방 ${roomId}에서 나감`);
+
+        delete rooms[roomId]
+        console.log(`방 ${roomId} 삭제됨`);
       }
     });
     socket.on('user-leave', ({ roomId, role }) => {
       socket.to(roomId).emit('user-left', { role });      // 수동 leave 도 동일 처리
+      
+     if (rooms[roomId]) {
+    delete rooms[roomId];
+    console.log(`🧹 방 ${roomId} 삭제됨`);
+  }
+
     });
   });
 
@@ -37,7 +48,7 @@ module.exports = function initDraftSocket(io) {
   function handleJoin(socket, { roomId, role, blueTeam, redTeam, bo, mode, hostKey  }) {
     socket.join(roomId);
     socket.data = { roomId, role };
-
+      
     if (!rooms[roomId]) {
       rooms[roomId] = {
         /* roomId 반드시 포함 ⬇ */
@@ -104,18 +115,21 @@ module.exports = function initDraftSocket(io) {
   }
 
   /* ---------- TIMEOUT ---------- */
-  function handleTimeout(roomId) {
-    const room = rooms[roomId];
-    const cur  = room.order[room.turnIndex];
+function handleTimeout(roomId) {
+  const room = rooms[roomId];
+  if (!room) return;
 
-    const champ =
-      cur.type === 'ban'
-        ? null
-        : randomChampion(room.history.map(h => h.champion));
+  const cur = room.order[room.turnIndex];
+  if (!cur) return;           // ⭐ 더 이상 턴이 없으면 종료
 
-    applyPick(roomId, champ, cur.team, cur.type);
-    nextTurn(roomId);
-  }
+  const champ =
+    cur.type === 'ban'
+      ? null
+      : randomChampion(room.history.map(h => h.champion));
+
+  applyPick(roomId, champ, cur.team, cur.type);
+  nextTurn(roomId);
+}
 
   /* ---------- MANUAL SELECT ---------- */
   function handleSelect(socket, { roomId, champion, team, type }) {
@@ -134,17 +148,20 @@ module.exports = function initDraftSocket(io) {
     io.to(roomId).emit('update-draft', { champion, team, type });
   }
 
-  function nextTurn(roomId) {
-    const room = rooms[roomId];
-    room.turnIndex += 1;
+function nextTurn(roomId) {
+  const room = rooms[roomId];
+  room.turnIndex += 1;
 
-    if (room.turnIndex >= room.order.length) {
-      io.to(roomId).emit('draft-finished', room.history);
-      return;
-    }
-    room.timer = Date.now() + PER_TURN_TIME;
-    tick(roomId);
+  // 드래프트 완료
+  if (room.turnIndex >= room.order.length) {
+    io.to(roomId).emit('draft-finished', room.history);
+    return;
   }
+
+  // 아직 남은 턴 → 타이머 재설정 후 다시 tick
+  room.timer = Date.now() + PER_TURN_TIME;
+  tick(roomId);              
+}
 
   /* ---------- MATCH RESULT (host only) ---------- */
   function handleMatchResult(socket, { roomId, winner , hostKey }) {
