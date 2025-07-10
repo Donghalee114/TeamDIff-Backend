@@ -1,6 +1,5 @@
 const PER_TURN_TIME = 30_000;
-const CHAMP_URL     = 'https://ddragon.leagueoflegends.com/cdn/14.12.1/data/ko_KR/champion.json';
-
+const CHAMP_URL     = 'https://ddragon.leagueoflegends.com/cdn/15.13.1/data/ko_KR/champion.json';
 
 
 module.exports = function initDraftSocket(io , closedRoomIds) {
@@ -10,8 +9,10 @@ module.exports = function initDraftSocket(io , closedRoomIds) {
   fetch(CHAMP_URL)
     .then(r => r.json())
     .then(d => {
+      const champions = Object.values(d.data);
       championIds = Object.values(d.data).map(c => c.id);
       console.log('✅ 챔피언 캐시 완료');
+      console.log(`총 챔피언 수: ${champions.length}`);
     })
     .catch(console.error);
 
@@ -103,16 +104,22 @@ module.exports = function initDraftSocket(io , closedRoomIds) {
   }
 
   /* ---------- TIMER ---------- */
-  function tick(roomId) {
-    const room = rooms[roomId];
-    if (!room) return;
+function tick(roomId) {
+  const room = rooms[roomId];
+  if (!room) return;
 
-    const remain = room.timer - Date.now();
-    io.to(roomId).emit('timer', Math.max(0, Math.ceil(remain / 1000)));
-
-    if (remain <= 0) return handleTimeout(roomId);
-    if (room.turnIndex < room.order.length) setTimeout(() => tick(roomId), 1000);
+  if (!room.order) {
+    console.warn(`room.order가 없음 - roomId: ${roomId}`);
+    return;
   }
+
+  const remain = room.timer - Date.now();
+  io.to(roomId).emit('timer', Math.max(0, Math.ceil(remain / 1000)));
+
+  if (remain <= 0) return handleTimeout(roomId);
+  if (room.turnIndex < room.order.length) setTimeout(() => tick(roomId), 1000);
+}
+
 
   /* ---------- TIMEOUT ---------- */
 function handleTimeout(roomId) {
