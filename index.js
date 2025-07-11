@@ -38,6 +38,11 @@ app.use('/tournament', tournament);
 app.use('/teams', team);
 app.use('/room', draftRoom);
 
+
+app.get('/ping' , (req, res) => {
+  res.status(200).json({ message: 'pong' });
+});
+
 (async () => {
   try { await pool.query('SELECT NOW()'); console.log('✅ PostgreSQL 연결'); }
   catch (e) { console.error('❌ PostgreSQL 실패', e); }

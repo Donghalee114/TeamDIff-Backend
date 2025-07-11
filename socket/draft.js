@@ -13,6 +13,7 @@ module.exports = function initDraftSocket(io , closedRoomIds) {
       championIds = Object.values(d.data).map(c => c.id);
       console.log('✅ 챔피언 캐시 완료');
       console.log(`총 챔피언 수: ${champions.length}`);
+      console.log()
     })
     .catch(console.error);
 
@@ -126,8 +127,8 @@ function handleTimeout(roomId) {
   const room = rooms[roomId];
   if (!room) return;
 
-  const cur = room.order[room.turnIndex];
-  if (!cur) return;           // ⭐ 더 이상 턴이 없으면 종료
+  const cur = room.order[room.turnIdex];
+  if (!cur) return;           // 더 이상 턴이 없으면 종료
 
   const champ =
     cur.type === 'ban'
