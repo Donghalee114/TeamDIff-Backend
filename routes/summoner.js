@@ -9,6 +9,7 @@ router.get('/:name', async (req, res) => {
   const summonerTag = req.query.tag || 'KR1';
 
   try {
+    // 첫 번째 API: Riot ID → PUUID
     const response = await axios.get(
       `https://asia.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(summonerName)}/${summonerTag}`,
       {
@@ -17,15 +18,35 @@ router.get('/:name', async (req, res) => {
         }
       }
     );
+
+    const puuid = response.data.puuid;
+
+    // 두 번째 API: PUUID → Summoner info
+    const response2 = await axios.get(
+      `https://kr.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}`,
+      {
+        headers: {
+          'X-Riot-Token': apiKey
+        }
+      }
+    );
+
+    // 하나의 JSON 객체로 응답
     res.json({
       puuid: response.data.puuid,
-      summonerId: response.data.id,
-      name: response.data.gameName
+      summonerId: response2.data.id,
+      tagLine: response.data.tagLine,
+      name: response.data.gameName,
+      profileIconId: response2.data.profileIconId,
+      summonerLevel: response2.data.summonerLevel
     });
+
   } catch (error) {
-    res.status(500).json({ error: `API 호출 실패 ${error.message}` });
+    console.error('API 호출 실패:', error);
+    res.status(500).json({ error: `API 호출 실패: ${error.message}` });
   }
 });
+
 
 router.get('/league/:puuid', async (req, res) => {
   const puuid = req.params.puuid;
@@ -51,5 +72,7 @@ router.get('/league/:puuid', async (req, res) => {
   res.status(500).json({ error: '분석 실패', detail: error.message });
 }
 });
+
+
 
 module.exports = router;

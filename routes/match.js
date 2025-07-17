@@ -7,7 +7,7 @@ const apiKey = process.env.RIOT_API_KEY;
 router.get('/:puuid/matches', async (req, res) => {
   const puuid = req.params.puuid;
   const start = req.query.start || 0;
-  const count = req.query.count || 50;
+  const count = req.query.count || 10;
 
   try {
     const response = await axios.get(
