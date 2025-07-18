@@ -1,6 +1,9 @@
 const PER_TURN_TIME = 30_000;
-const CHAMP_URL     = 'https://ddragon.leagueoflegends.com/cdn/15.13.1/data/ko_KR/champion.json';
+const CHAMP_URL     = 'https://ddragon.leagueoflegends.com/cdn/15.14.1/data/ko_KR/champion.json';
 
+// 방마다 연결 끊김 타이머를 관리할 객체 추가
+const disconnectTimeouts = {}; 
+const DISCONNECT_TIMEOUT_MS = 10_000; // 10초 내에 재연결되지 않으면 방 삭제
 
 module.exports = function initDraftSocket(io , closedRoomIds) {
   const rooms = {};
@@ -20,59 +23,111 @@ module.exports = function initDraftSocket(io , closedRoomIds) {
   io.on('connection', socket => {
     console.log('🔌 Socket connected:', socket.id);
 
+    // 재연결 시 이전 disconnect 타이머 취소 로직 추가
+    // (roomData가 있는 경우에만)
+    if (socket.data && socket.data.roomId && socket.data.role) {
+        const { roomId, role } = socket.data;
+        const timeoutKey = `${roomId}-${role}`;
+        if (disconnectTimeouts[timeoutKey]) {
+            clearTimeout(disconnectTimeouts[timeoutKey]);
+            delete disconnectTimeouts[timeoutKey];
+            console.log(`✅ ${role} 유저(${socket.id}) 재연결됨. 방 ${roomId} 삭제 타이머 취소.`);
+        }
+    }
+
     socket.on('join-room', payload => handleJoin(socket, payload));
     socket.on('ready',        () => handleReady(socket));
     socket.on('select-champion', payload => handleSelect(socket, payload));
     socket.on('match-result', payload => handleMatchResult(socket, payload));
     socket.on('side-chosen',  payload => handleSideChosen(socket, payload));
-    socket.on('disconnect', () => {
-      const { roomId, role } = socket.data || {};
-      if (roomId && role) {
-        socket.to(roomId).emit('user-left', { role });    // 상대에게 알림
-        console.log(`[알림] ${role} 유저 방 ${roomId}에서 나감`);
 
-        delete rooms[roomId]
-        console.log(`방 ${roomId} 삭제됨`);
-      }
-    });
-    socket.on('user-leave', ({ roomId, role }) => {
-      socket.to(roomId).emit('user-left', { role });      // 수동 leave 도 동일 처리
-      
-     if (rooms[roomId]) {
-    delete rooms[roomId];
-    console.log(`🧹 방 ${roomId} 삭제됨`);
+    // 🔴 disconnect 이벤트 핸들러 수정
+socket.on('disconnect', () => {
+  const { roomId, userId, role } = socket.data || {};
+  if (!roomId || !userId) return;
+
+  const timeoutKey = `${roomId}-${userId}`;
+
+  if (disconnectTimeouts[timeoutKey]) {
+    clearTimeout(disconnectTimeouts[timeoutKey]);
   }
 
-    });
+  disconnectTimeouts[timeoutKey] = setTimeout(() => {
+    socket.to(roomId).emit('user-left', { role });
+    console.log(`[알림] ${role} 유저(${userId}) 방 ${roomId}에서 나감 (연결 끊김)`);
+
+    if (rooms[roomId]) {
+      delete rooms[roomId];
+      console.log(`⏰ 방 ${roomId} 삭제됨 (disconnect 후 타이머)`);
+    }
+    delete disconnectTimeouts[timeoutKey];
+  }, DISCONNECT_TIMEOUT_MS);
+});
+
+
+
+    // 🔴 user-leave 이벤트 핸들러 수정
+socket.on('user-leave', ({ roomId, role, userId }) => {
+  console.log(`[알림] ${role} 유저 방 ${roomId}에서 명시적으로 나감`);
+
+  const timeoutKey = `${roomId}-${userId}`;
+  
+  // 기존 타이머 있으면 제거
+  if (disconnectTimeouts[timeoutKey]) {
+    clearTimeout(disconnectTimeouts[timeoutKey]);
+  }
+
+  // 일정 시간 뒤 방 삭제 예약 (예: 60초)
+  disconnectTimeouts[timeoutKey] = setTimeout(() => {
+    if (rooms[roomId]) {
+      delete rooms[roomId];
+      console.log(`🧹 방 ${roomId} 삭제됨 (명시적 user-leave 후 타이머)`);
+    }
+    delete disconnectTimeouts[timeoutKey];
+  }, 60000); // 60초 후 삭제
+});
+
   });
 
   /* ---------- JOIN ---------- */
-  function handleJoin(socket, { roomId, role, blueTeam, redTeam, bo, mode, hostKey  }) {
-    socket.join(roomId);
-    socket.data = { roomId, role };
-      
-    if (!rooms[roomId]) {
-      rooms[roomId] = {
-        /* roomId 반드시 포함 ⬇ */
-        roomId,
-        hostKey,  
-        blueTeam,
-        redTeam,
-        bo,
-        mode,
-        blueReady:false,
-        redReady:false,
-        sideMap: { blue: blueTeam, red: redTeam },
-        series: {
-          teamWins:{ [blueTeam]:0, [redTeam]:0 },
-          currentGame:1,
-          resultPosted:false,
-          over:false
-        }
-      };
-    }
-    io.to(roomId).emit('room-status', rooms[roomId]);
+function handleJoin(socket, { roomId, role, userId, blueTeam, redTeam, bo, mode, hostKey }) {
+  socket.join(roomId);
+  socket.data = { roomId, role, userId };
+
+  if (!rooms[roomId]) {
+    rooms[roomId] = {
+      roomId,
+      hostKey,
+      blueTeam,
+      redTeam,
+      bo,
+      mode,
+      blueReady: false,
+      redReady: false,
+      sideMap: { blue: blueTeam, red: redTeam },
+      series: {
+        teamWins: { [blueTeam]: 0, [redTeam]: 0 },
+        currentGame: 1,
+        resultPosted: false,
+        over: false,
+      },
+      users: {}, // userId: role 매핑용
+    };
   }
+
+  rooms[roomId].users[userId] = role;
+
+  // 재접속 타이머 있으면 취소
+  const timeoutKey = `${roomId}-${userId}`;
+  if (disconnectTimeouts[timeoutKey]) {
+    clearTimeout(disconnectTimeouts[timeoutKey]);
+    delete disconnectTimeouts[timeoutKey];
+    console.log(`✅ ${role} 유저(${userId}) 재접속, 타이머 취소`);
+  }
+
+  io.to(roomId).emit('room-status', rooms[roomId]);
+}
+
 
   /* ---------- READY ---------- */
   function handleReady(socket) {
