@@ -39,11 +39,11 @@ app.use('/teams', team);
 app.use('/room', draftRoom);
 
 
-app.get('/ping' , (req, res) => {
-  res.status(200).json({ message: 'pong' });
+app.get('/ping', async (req, res) => {
   try {
-    pool.query('SELECT NOW()');
-    console.log('✅ PostgreSQL 연결중..');
+    const result = await pool.query('SELECT NOW()');
+    console.log('✅ PostgreSQL 연결중..', result.rows[0]);
+    res.status(200).json({ message: 'pong', time: result.rows[0].now });
   } catch (e) {
     console.error('❌ PostgreSQL 연결 실패', e);
     res.status(500).json({ error: 'Database connection failed' });
