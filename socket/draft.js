@@ -192,6 +192,8 @@ function handleTimeout(roomId) {
 
   applyPick(roomId, champ, cur.team, cur.type);
   nextTurn(roomId);
+
+
 }
 
   /* ---------- MANUAL SELECT ---------- */

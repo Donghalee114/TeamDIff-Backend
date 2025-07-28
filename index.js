@@ -41,6 +41,13 @@ app.use('/room', draftRoom);
 
 app.get('/ping' , (req, res) => {
   res.status(200).json({ message: 'pong' });
+  try {
+    pool.query('SELECT NOW()');
+    console.log('✅ PostgreSQL 연결중..');
+  } catch (e) {
+    console.error('❌ PostgreSQL 연결 실패', e);
+    res.status(500).json({ error: 'Database connection failed' });
+  }
 });
 
 (async () => {
